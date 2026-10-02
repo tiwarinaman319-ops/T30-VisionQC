@@ -172,3 +172,19 @@ cd vision-qc
 2. **Inspection:** Click **Start Scanning** to enable real-time 500ms continuous inspection.
 3. **Threshold Tuning:** Adjust the sensitivity slider to set pass/fail tolerances dynamically.
 4. **Audit Review:** Click any item in the **Audit Log** to open the inspection modal and compare live heatmaps against baseline references.
+
+## 📸 Screenshots & Demo
+* <img width="1919" height="997" alt="Screenshot 2026-10-03 030743" src="https://github.com/user-attachments/assets/fc7e8034-e2e0-4446-87cb-5777dc089957" />
+* <img width="1898" height="999" alt="Screenshot 2026-10-03 031027" src="https://github.com/user-attachments/assets/3e004451-5edb-4a0a-8274-6c5b37fa6146" />
+
+
+
+## 🚧 Limitations & Future Scope
+* **Limitations:** Currently processes single-camera feeds; extreme lighting variations on the factory floor may require recalibration of the baseline.
+* **Future Scope:** Expanding to multi-camera synchronization, edge-compute hardware deployment (NVIDIA Jetson / Raspberry Pi), and direct integration with factory ERP systems.
+
+## 👥 Team Members
+* Rishabh Singh
+* Karan Sharma
+* Daksh Shrivastav
+* Naman Tiwari
