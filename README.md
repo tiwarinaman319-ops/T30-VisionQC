@@ -127,9 +127,9 @@ cd vision-qc
 
 4. Launch the FastAPI server:
    ```bash
-   python -m uvicorn main:app --reload --port 8000
+   python -m uvicorn main:app --reload --port 8001
    ```
-   *The backend will be running at `http://localhost:8000` (API documentation accessible at `http://localhost:8000/docs`).*
+   *The backend will be running at `http://localhost:8001` (API documentation accessible at `http://localhost:8001/docs`).*
 
 ---
 
