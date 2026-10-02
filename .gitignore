@@ -1,0 +1,9 @@
+
+*.ckpt
+*.pt
+backend/results/
+backend/experiment_run/
+backend/data/
+backend/__pycache__/
+backend/qc.db
+
