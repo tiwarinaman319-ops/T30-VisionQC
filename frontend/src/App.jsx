@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Camera, 
   CameraOff, 
@@ -28,8 +28,7 @@ export default function App() {
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [stream, setStream] = useState(null);
   const [isInspecting, setIsInspecting] = useState(false);
-  const [threshold, setThreshold] = useState(1);
-  const [isModelReady, setIsModelReady] = useState(false);
+  const [threshold, setThreshold] = useState(0.274);
   const [scanResult, setScanResult] = useState(null);
   const [stats, setStats] = useState({ total: 0, passed: 0, rejected: 0, rejection_rate: 0 });
   const [statusMessage, setStatusMessage] = useState("");
@@ -42,13 +41,14 @@ export default function App() {
 
   // Hardware settings
   const [isMirrored, setIsMirrored] = useState(false);
+  const [videoDevices, setVideoDevices] = useState([]);
   const [selectedDeviceId, setSelectedDeviceId] = useState("");
 
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const timerRef = useRef(null);
 
-  // Bind video element to camera stream
+  // Bind video element to camera stream as soon as it mounts
   useEffect(() => {
     if (isCameraActive && stream && videoRef.current) {
       videoRef.current.srcObject = stream;
@@ -68,8 +68,13 @@ export default function App() {
       setStream(mediaStream);
       setIsCameraActive(true);
 
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const inputs = devices.filter(d => d.kind === 'videoinput');
+      setVideoDevices(inputs);
+
       const activeId = mediaStream.getVideoTracks()[0]?.getSettings()?.deviceId;
       if (activeId) setSelectedDeviceId(activeId);
+      setStatusMessage("Camera initialized.");
     } catch (err) {
       console.error("Camera error:", err);
       setStatusMessage("Camera permission denied or camera not found.");
@@ -91,19 +96,26 @@ export default function App() {
       setIsInspecting(false);
     }
     setIsCameraActive(false);
+    setStatusMessage("Camera feed deactivated.");
   };
 
   const toggleCameraPower = () => {
     if (isCameraActive) {
       stopCameraStream();
-      setStatusMessage("Camera feed deactivated.");
     } else {
       startCameraStream(selectedDeviceId);
-      setStatusMessage("Camera initialized.");
     }
   };
 
-  const fetchThreshold = useCallback(async () => {
+  useEffect(() => {
+    fetchStats();
+    fetchThreshold();
+    return () => {
+      stopCameraStream();
+    };
+  }, []);
+
+  const fetchThreshold = async () => {
     try {
       const res = await fetch(`${API_BASE}/threshold`);
       const data = await res.json();
@@ -111,23 +123,9 @@ export default function App() {
     } catch (e) {
       console.error(e);
     }
-  }, []);
+  };
 
-  const fetchModelStatus = useCallback(async () => {
-    try {
-      const res = await fetch(`${API_BASE}/model-status`);
-      const data = await res.json();
-      setIsModelReady(data.trained === true);
-      if (!data.trained) {
-        setStatusMessage("No calibrated model loaded. Calibrate a clean reference part before inspection.");
-      }
-    } catch (e) {
-      console.error(e);
-      setStatusMessage("Backend server offline.");
-    }
-  }, []);
-
-  const fetchStats = useCallback(async () => {
+  const fetchStats = async () => {
     try {
       const res = await fetch(`${API_BASE}/stats`);
       const data = await res.json();
@@ -135,22 +133,7 @@ export default function App() {
     } catch (e) {
       console.error(e);
     }
-  }, []);
-
-  useEffect(() => {
-    const initializationTimer = window.setTimeout(() => {
-      fetchStats();
-      fetchThreshold();
-      fetchModelStatus();
-    }, 0);
-    return () => window.clearTimeout(initializationTimer);
-  }, [fetchStats, fetchThreshold, fetchModelStatus]);
-
-  useEffect(() => () => {
-    clearInterval(timerRef.current);
-    stream?.getTracks().forEach(track => track.stop());
-    if (videoRef.current) videoRef.current.srcObject = null;
-  }, [stream]);
+  };
 
   const updateThreshold = async (val) => {
     const floatVal = parseFloat(val);
@@ -214,29 +197,22 @@ export default function App() {
       const t1 = performance.now();
       setLatency(Math.round(t1 - t0));
 
-      if (!res.ok) {
-        setStatusMessage(data.detail || "Inspection failed.");
-        return;
-      }
+      if (!data.error) {
+        setScanResult(data);
+        fetchStats();
 
-      setScanResult(data);
-      fetchStats();
-
-      if (data.result === 'FAIL') {
-        saveInspectionRecord(data);
+        if (data.result === 'FAIL') {
+          saveInspectionRecord(data);
+        }
       }
     } catch (err) {
-      console.error(err);
+      console.error("Inspection error:", err);
     }
   };
 
   const toggleInspection = () => {
     if (!isCameraActive) {
       setStatusMessage("Activate camera first before starting scanner.");
-      return;
-    }
-    if (!isModelReady) {
-      setStatusMessage("Calibrate a clean reference part before starting inspection.");
       return;
     }
     if (isInspecting) {
@@ -257,32 +233,30 @@ export default function App() {
     setIsTraining(true);
     setStatusMessage("Hold reference object steady in the crosshair...");
 
-    const fd = new FormData();
-    const FRAMES = 15;
-
-    for (let i = 0; i < FRAMES; i++) {
-      setCaptureProgress(Math.round(((i + 1) / FRAMES) * 100));
-      const blob = await captureFrameBlob();
-      if (blob) fd.append("files", blob, `golden_${i}.jpg`);
-      await new Promise(r => setTimeout(r, 160));
-    }
-
-    setStatusMessage("Extracting features and generating PatchCore memory bank...");
-
     try {
+      const fd = new FormData();
+      const FRAMES = 10;
+
+      for (let i = 0; i < FRAMES; i++) {
+        setCaptureProgress(Math.round(((i + 1) / FRAMES) * 100));
+        const blob = await captureFrameBlob();
+        if (blob) fd.append("files", blob, `golden_${i}.jpg`);
+        await new Promise(r => setTimeout(r, 120));
+      }
+
+      setStatusMessage("Extracting features and generating PatchCore memory bank...");
+
       const res = await fetch(`${API_BASE}/train`, { method: "POST", body: fd });
       const data = await res.json();
-      if (!res.ok) {
-        setStatusMessage(data.detail || "Calibration failed.");
-        return;
-      }
+      
       if (data.status === "trained") {
-        setIsModelReady(true);
-        setThreshold(Number(data.threshold).toFixed(3));
-        setStatusMessage(`Calibration complete: ${data.training_images} training and ${data.calibration_images} held-out clean frames. Reference part registered as Normal.`);
+        setStatusMessage(`Calibration complete (${data.images_used || FRAMES} frames enrolled). Object registered.`);
+      } else {
+        setStatusMessage(data.error || "Calibration error occurred.");
       }
     } catch (err) {
-      setStatusMessage(err.message || "Backend server offline.");
+      console.error(err);
+      setStatusMessage("Backend server offline or request timed out.");
     } finally {
       setIsTraining(false);
       setCaptureProgress(0);
@@ -297,7 +271,7 @@ export default function App() {
       flexDirection: 'column'
     }}>
 
-      {/* Header Bar */}
+      {/* Industrial Header */}
       <header style={{
         padding: '14px 24px',
         backgroundColor: 'rgba(11, 17, 33, 0.95)',
@@ -344,7 +318,7 @@ export default function App() {
           </div>
         </div>
 
-        {/* Action Controls */}
+        {/* Master Controls */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <button
             onClick={toggleCameraPower}
@@ -367,7 +341,7 @@ export default function App() {
 
           <button
             onClick={handleAutoTrain}
-            disabled={!isCameraActive || isTraining || !isModelReady}
+            disabled={!isCameraActive}
             style={{
               backgroundColor: isTraining ? '#0369a1' : 'rgba(56, 189, 248, 0.12)',
               color: '#38bdf8',
@@ -379,7 +353,7 @@ export default function App() {
               display: 'flex',
               alignItems: 'center',
               gap: '8px',
-              cursor: (!isCameraActive || isTraining) ? 'not-allowed' : 'pointer',
+              cursor: !isCameraActive ? 'not-allowed' : 'pointer',
               opacity: !isCameraActive ? 0.4 : 1
             }}
           >
@@ -389,7 +363,7 @@ export default function App() {
         </div>
       </header>
 
-      {/* Notifications */}
+      {/* Notification Toast */}
       {statusMessage && (
         <div style={{
           backgroundColor: '#0b1329',
@@ -407,7 +381,7 @@ export default function App() {
         </div>
       )}
 
-      {/* Navigation Pills */}
+      {/* Nav Tabs */}
       <div style={{
         display: 'flex',
         gap: '6px',
@@ -453,7 +427,7 @@ export default function App() {
         })}
       </div>
 
-      {/* Main Body */}
+      {/* Main Viewport Content */}
       <main style={{
         flex: 1,
         padding: '18px 24px 32px 24px',
@@ -487,7 +461,7 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Viewport Frame */}
+              {/* Viewport Container */}
               <div style={{
                 position: 'relative',
                 width: '100%',
@@ -516,7 +490,7 @@ export default function App() {
                 />
                 <canvas ref={canvasRef} style={{ display: 'none' }} />
 
-                {/* Heatmap Overlay */}
+                {/* Defect Heatmap Overlay */}
                 {scanResult && scanResult.heatmap_b64 && isInspecting && isCameraActive && (
                   <img
                     src={scanResult.heatmap_b64}
@@ -535,7 +509,7 @@ export default function App() {
                   />
                 )}
 
-                {/* Reticle */}
+                {/* Target Reticle */}
                 {isCameraActive && (
                   <div style={{
                     position: 'absolute',
@@ -630,9 +604,10 @@ export default function App() {
                   </button>
                 </div>
 
+                {/* Fixed: Scanner is unlocked whenever camera is active */}
                 <button
                   onClick={toggleInspection}
-                  disabled={!isCameraActive || isTraining}
+                  disabled={!isCameraActive}
                   style={{
                     backgroundColor: isInspecting ? '#ef4444' : '#10b981',
                     color: '#fff',
@@ -642,8 +617,8 @@ export default function App() {
                     fontWeight: 900,
                     fontSize: '13px',
                     letterSpacing: '0.5px',
-                    cursor: (!isCameraActive || isTraining || !isModelReady) ? 'not-allowed' : 'pointer',
-                    opacity: (!isCameraActive || !isModelReady) ? 0.4 : 1,
+                    cursor: !isCameraActive ? 'not-allowed' : 'pointer',
+                    opacity: !isCameraActive ? 0.4 : 1,
                     display: 'flex',
                     alignItems: 'center',
                     gap: '8px',
@@ -656,7 +631,7 @@ export default function App() {
 
             </div>
 
-            {/* Sidebar Metrics */}
+            {/* Metrics Panel */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               
               <div style={{
@@ -730,7 +705,7 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 2: DEFECT HEATMAP RECORDINGS */}
+        {/* TAB 2: DEFECT RECORDINGS */}
         {activeTab === 'history' && (
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
@@ -762,10 +737,10 @@ export default function App() {
                 padding: '40px',
                 border: '1px dashed #334155',
                 borderRadius: '8px',
-                color: '#64748b',
+              color: '#64748b',
                 fontSize: '13px'
               }}>
-                No defects or manual snapshots recorded yet. Activate scanner and test a defect.
+                No defects recorded yet. Start the scanner and introduce a flaw to capture records.
               </div>
             ) : (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '16px' }}>
@@ -842,13 +817,13 @@ export default function App() {
                 <span style={{ fontSize: '18px', fontWeight: 900, color: '#38bdf8' }}>{threshold}</span>
               </div>
               <p style={{ fontSize: '12px', color: '#64748b', margin: '0 0 20px 0' }}>
-                Score relative to the held-out clean reference; scores above the cutoff are flagged.
+                Distance cutoff that flags a part as an industrial anomaly.
               </p>
               
               <input
                 type="range"
-                min="0.50"
-                max="1.50"
+                min="0.10"
+                max="0.80"
                 step="0.005"
                 value={threshold}
                 onChange={(e) => updateThreshold(e.target.value)}
@@ -856,9 +831,9 @@ export default function App() {
               />
 
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#64748b', marginTop: '8px' }}>
-                <span>Strict (0.50)</span>
-                <span>Reference (1.00)</span>
-                <span>Permissive (1.50)</span>
+                <span>Strict (0.10)</span>
+                <span>Calibrated ({threshold})</span>
+                <span>Permissive (0.80)</span>
               </div>
             </div>
           </div>
