@@ -78,16 +78,16 @@ export default function Controls({
         </div>
         <input
           type="range"
-          min="10"
-          max="90"
+          min="110"
+          max="150"
           value={sensitivity}
           onChange={(e) => setSensitivity(Number(e.target.value))}
           className="w-full accent-indigo-500 bg-gray-800 rounded-lg h-2 cursor-pointer"
         />
         <div className="flex justify-between text-[10px] font-mono text-gray-500 px-0.5">
-          <span>Strict (0.10)</span>
-          <span>Default (0.45)</span>
-          <span>Lenient (0.90)</span>
+          <span>Strict (0.50)</span>
+          <span>Default (1.0)</span>
+          <span>Lenient (1.50)</span>
         </div>
       </div>
 

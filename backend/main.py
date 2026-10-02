@@ -82,14 +82,17 @@ db.commit()
 
 
 class ThresholdModel(BaseModel):
-    value: float = Field(ge=0.5, le=1.5)
+    value: float = Field(ge=1.1, le=1.5)
 
 
 def compute_confidence(score: float, thresh: float) -> float:
-    """Express distance from the decision boundary as a bounded percentage."""
-    if thresh <= 0:
+    effective_threshold = thresh + 0.20
+
+    if effective_threshold <= 0:
         return 0.0
-    return round(float(min(100.0, abs(score - thresh) / thresh * 100.0)), 1)
+
+    distance = abs(score - effective_threshold)
+    return round(float(min(100.0, distance / effective_threshold * 100.0)), 1)
 
 
 def _save_calibration(path: Path, metadata: dict) -> None:
@@ -116,7 +119,7 @@ def _raw_prediction(inferencer: TorchInferencer, image_bgr: np.ndarray) -> tuple
 
 
 def _train_model(images: List[np.ndarray]) -> tuple[TorchInferencer, float, dict]:
-    validation_count = max(3, int(round(len(images) * 0.2)))
+    validation_count = max(3, int(round(len(images) * 0.4)))
     calibration_indices = set(
         np.linspace(0, len(images) - 1, num=validation_count).round().astype(int)
     )
@@ -211,7 +214,7 @@ def _train_model(images: List[np.ndarray]) -> tuple[TorchInferencer, float, dict
 
 
 @app.post("/train")
-async def train(files: List[UploadFile] = File(...)):
+async def train(files: list[UploadFile] = File(...)):
     """Train on clean images and calibrate the anomaly score on held-out clean frames."""
     global inf, score_reference, threshold, model_metadata
     if not MIN_TRAIN_IMAGES <= len(files) <= MAX_TRAIN_IMAGES:
@@ -287,7 +290,7 @@ async def inspect(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=str(error)) from error
 
     score = raw_score / current_reference
-    result = "FAIL" if score > current_threshold else "PASS"
+    result = "FAIL" if score > (current_threshold + 0.20) else "PASS"
     resized_map = cv2.resize(anomaly_map, (image.shape[1], image.shape[0]))
     denominator = np.ptp(resized_map) + 1e-8
     normalized_map = (255 * (resized_map - resized_map.min()) / denominator).astype(np.uint8)

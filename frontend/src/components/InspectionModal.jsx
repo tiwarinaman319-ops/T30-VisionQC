@@ -1,11 +1,15 @@
 import React from 'react';
 import { X, CheckCircle2, ShieldAlert, Sparkles, Layers } from 'lucide-react';
 
-export default function InspectionModal({ log, onClose }) {
+export default function InspectionModal({
+  log,
+  baselineReference,
+  onClose
+}) {
   if (!log) return null;
 
   // Placeholder clean reference image for comparison
-  const goldenReferenceImage = "https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=600&auto=format&fit=crop&q=60";
+  
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
@@ -47,10 +51,10 @@ export default function InspectionModal({ log, onClose }) {
             </div>
             <div className="relative aspect-video rounded-xl overflow-hidden border border-emerald-500/30 bg-black">
               <img
-                src={goldenReferenceImage}
-                alt="Golden Reference"
-                className="w-full h-full object-cover"
-              />
+  src={baselineReference}
+  alt="Golden Reference"
+  className="w-full h-full object-cover"
+/>
               <div className="absolute bottom-2 left-2 bg-black/70 px-2 py-0.5 rounded text-[10px] font-mono text-emerald-400 border border-emerald-500/30">
                 0.0% ANOMALY SCORE
               </div>
@@ -71,11 +75,21 @@ export default function InspectionModal({ log, onClose }) {
             <div className={`relative aspect-video rounded-xl overflow-hidden border bg-black ${
               log.status === 'FAIL' ? 'border-red-500/40 shadow-lg shadow-red-950/30' : 'border-gray-800'
             }`}>
-              <img
-                src={log.image}
-                alt="Inspected Scan"
-                className="w-full h-full object-cover"
-              />
+              <div className="relative w-full h-full">
+  <img
+    src={log.image}
+    alt="Inspected Scan"
+    className="w-full h-full object-cover"
+  />
+
+  {log.heatmap && (
+    <img
+      src={log.heatmap}
+      alt="Anomaly Heatmap"
+      className="absolute inset-0 w-full h-full object-cover mix-blend-screen opacity-60"
+    />
+  )}
+</div>
               <div className="absolute bottom-2 left-2 bg-black/70 px-2 py-0.5 rounded text-[10px] font-mono font-bold text-white border border-gray-700">
                 SCORE: {(log.score * 100).toFixed(1)}%
               </div>

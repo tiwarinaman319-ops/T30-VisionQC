@@ -1,12 +1,11 @@
 import React from 'react';
 import { BarChart3, CheckCircle2, AlertOctagon, Percent } from 'lucide-react';
 
-export default function ShiftMetrics({ logs }) {
-  const totalScans = logs.length;
-  const rejections = logs.filter(l => l.status === 'FAIL').length;
-  const passed = logs.filter(l => l.status === 'PASS' || l.status === 'OVERRIDE').length;
-  const rejectionRate = totalScans > 0 ? ((rejections / totalScans) * 100).toFixed(1) : '0.0';
-
+export default function ShiftMetrics({ logs, stats }) {
+  const totalScans = stats?.total ?? 0;
+const rejections = stats?.rejected ?? 0;
+const passed = stats?.passed ?? 0;
+const rejectionRate = Number(stats?.rejection_rate ?? 0).toFixed(1);
   return (
     <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5 shadow-xl flex flex-col gap-4">
       <div className="flex items-center justify-between border-b border-gray-800 pb-3">

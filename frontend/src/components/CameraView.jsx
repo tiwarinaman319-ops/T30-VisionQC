@@ -1,7 +1,16 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { Camera, ShieldAlert, CheckCircle2, Crosshair } from 'lucide-react';
 
-export default function CameraView({ onFrameCapture, heatmapUrl, status = 'PASS', opacity = 50, anomalyScore = 0.12 }) {
+export default function CameraView({
+  onFrameCapture,
+  heatmapUrl,
+  status = 'READY',
+  opacity = 50,
+  anomalyScore = 0,
+  confidence = 0,
+  isScanning = true,
+  isCalibrating = false
+}) {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const [isCameraActive, setIsCameraActive] = useState(false);
@@ -32,7 +41,7 @@ export default function CameraView({ onFrameCapture, heatmapUrl, status = 'PASS'
 
   // Frame Capture Loop
   useEffect(() => {
-    if (!isCameraActive) return;
+  if (!isCameraActive || (!isScanning && !isCalibrating)) return;
     const interval = setInterval(() => {
       if (videoRef.current && canvasRef.current) {
         const video = videoRef.current;
@@ -49,14 +58,16 @@ export default function CameraView({ onFrameCapture, heatmapUrl, status = 'PASS'
     }, 500);
 
     return () => clearInterval(interval);
-  }, [isCameraActive, onFrameCapture]);
+  }, [isCameraActive, isScanning, isCalibrating, onFrameCapture]);
 
   // Border glow styles based on AI status
   const borderStyles = status === 'FAIL'
-    ? 'border-red-500 shadow-2xl shadow-red-950/50 ring-2 ring-red-500/50'
-    : status === 'OVERRIDE'
-    ? 'border-amber-500 shadow-2xl shadow-amber-950/50'
-    : 'border-emerald-500/80 shadow-2xl shadow-emerald-950/30';
+  ? 'border-red-500 shadow-2xl shadow-red-950/50 ring-2 ring-red-500/50'
+  : status === 'OVERRIDE'
+  ? 'border-amber-500 shadow-2xl shadow-amber-950/50'
+  : status === 'READY'
+  ? 'border-gray-600 shadow-2xl shadow-gray-950/30'
+  : 'border-emerald-500/80 shadow-2xl shadow-emerald-950/30';
 
   return (
     <div className={`relative w-full bg-gray-900 rounded-2xl overflow-hidden border-2 transition-all duration-300 ${borderStyles}`}>
@@ -78,14 +89,27 @@ export default function CameraView({ onFrameCapture, heatmapUrl, status = 'PASS'
               {(anomalyScore * 100).toFixed(1)}%
             </span>
           </div>
+          <div className="flex items-center gap-1.5 font-mono text-xs">
+  <span className="text-gray-500">CONF:</span>
+  <span className="font-bold text-gray-200">
+    {Number(confidence).toFixed(1)}%
+  </span>
+</div>
 
           <div className={`flex items-center gap-1.5 px-2.5 py-0.5 rounded-full font-mono text-xs font-bold ${
             status === 'FAIL' ? 'bg-red-500/20 text-red-400 border border-red-500/40 animate-pulse' :
             status === 'OVERRIDE' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' :
-            'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
+            status === 'FAIL' ? 'bg-red-500/20 text-red-400 border border-red-500/40 animate-pulse' :
+status === 'OVERRIDE' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' :
+status === 'READY' ? 'bg-gray-500/20 text-gray-300 border border-gray-500/40' :
+'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
           }`}>
-            {status === 'FAIL' ? <ShieldAlert className="w-3.5 h-3.5" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
-            {status}
+            {status === 'FAIL'
+  ? <ShieldAlert className="w-3.5 h-3.5" />
+  : status === 'READY'
+  ? <Camera className="w-3.5 h-3.5" />
+  : <CheckCircle2 className="w-3.5 h-3.5" />}
+{status}
           </div>
         </div>
       </div>
