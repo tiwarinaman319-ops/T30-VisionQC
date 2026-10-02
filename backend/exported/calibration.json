@@ -2,7 +2,7 @@
   "images_used": 25,
   "training_images": 15,
   "calibration_images": 10,
-  "score_reference": 36.08627986907959,
-  "threshold": 1.25,
+  "score_reference": 45.91518573760986,
+  "threshold": 1.5,
   "score_type": "patchcore_raw_image_score_over_held_out_normal_reference"
 }

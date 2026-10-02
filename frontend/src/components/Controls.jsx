@@ -85,8 +85,8 @@ export default function Controls({
           className="w-full accent-indigo-500 bg-gray-800 rounded-lg h-2 cursor-pointer"
         />
         <div className="flex justify-between text-[10px] font-mono text-gray-500 px-0.5">
-          <span>Strict (0.50)</span>
-          <span>Default (1.0)</span>
+          <span>Strict (1.10)</span>
+          <span>Default (1.30)</span>
           <span>Lenient (1.50)</span>
         </div>
       </div>

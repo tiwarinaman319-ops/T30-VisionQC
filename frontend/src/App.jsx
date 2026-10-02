@@ -8,7 +8,8 @@ import {
   inspectFrame,
   trainBaseline,
   getStats,
-  setThreshold
+  setThreshold,
+  overrideLatest
 } from './api';
 import CameraView from './components/CameraView';
 import Controls from './components/Controls';
@@ -33,8 +34,8 @@ const handleThresholdChange = async (value) => {
   }
 };
 
-  const [sensitivity, setSensitivity] = useState(100);
-  const [opacity, setOpacity] = useState(60);
+  const [sensitivity, setSensitivity] = useState(130);
+  const [opacity, setOpacity] = useState(50);
   const [manualOverride, setManualOverride] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
   const [isCalibrating, setIsCalibrating] = useState(false);
@@ -59,6 +60,7 @@ const handleThresholdChange = async (value) => {
 
   const capturedFrames = useRef([]);
   const inspectionBusy = useRef(false);
+  const manualOverrideRef = useRef(false);
   const handleFrameCapture = useCallback(async (base64Image) => {
   // Baseline enrollment
   if (isCalibrating) {
@@ -102,6 +104,9 @@ const handleThresholdChange = async (value) => {
   if (devMode) {
   return;
     }
+    if (manualOverrideRef.current) {
+  return;
+}
   if (!isScanning || inspectionBusy.current) {
     return;
   }
@@ -159,6 +164,14 @@ const handleThresholdChange = async (value) => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
   useEffect(() => {
+    if (!isScanning && !isCalibrating) {
+      setCurrentScore(0);
+      setCurrentConfidence(0);
+      setBackendStatus('READY');
+      setHeatmapUrl(null);
+    }
+  }, [isScanning, isCalibrating]);
+  useEffect(() => {
   let mounted = true;
 
   const refreshStats = async () => {
@@ -198,6 +211,31 @@ const handleThresholdChange = async (value) => {
     setCalibrationProgress(0);
     setBackendError(null);
   };
+  const handleOverride = async () => {
+  try {
+    await overrideLatest();
+
+    manualOverrideRef.current = true;
+    setManualOverride(true);
+    setBackendStatus('PASS');
+
+    setLogs(prev => {
+      if (prev.length === 0) return prev;
+
+      return [
+        {
+          ...prev[0],
+          status: 'PASS',
+          override: true,
+        },
+        ...prev.slice(1),
+      ];
+    });
+  } catch (error) {
+    console.error("Override failed:", error);
+    setBackendError(error.message || "Override failed.");
+  }
+};
 
   const triggerTestScan = (score, forcedStatus) => {
   setCurrentScore(score);
@@ -236,81 +274,125 @@ const handleThresholdChange = async (value) => {
       </header>
 
       {/* Main Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 flex flex-col gap-6">
-          <CameraView
-  onFrameCapture={handleFrameCapture}
-  heatmapUrl={heatmapUrl}
-  status={manualOverride ? 'OVERRIDE' : backendStatus}
-  opacity={opacity}
-  anomalyScore={currentScore}
-  confidence={currentConfidence}
-  isScanning={isScanning}
-  isCalibrating={isCalibrating}
-/>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <ShiftMetrics
-  logs={logs}
-  stats={backendStats}
-/>
-            
-            {devMode ? (
-              <div className="bg-gray-900 border border-amber-500/30 rounded-2xl p-5 shadow-xl flex flex-col gap-3">
-                <div className="flex justify-between items-center">
-                  <span className="text-xs font-semibold text-amber-300">Demo Testing Controls</span>
-                  <span className="text-[10px] font-mono text-amber-400/80">DEV ONLY</span>
-                </div>
-                <p className="text-[11px] text-gray-400">Simulate backend inspection payloads:</p>
-                <div className="flex flex-col gap-2 font-mono text-xs mt-auto">
-                  <button
-                    onClick={() => triggerTestScan(0.12, 'PASS')}
-                    className="w-full py-2 bg-emerald-950/40 hover:bg-emerald-900/50 text-emerald-300 rounded-lg border border-emerald-800/50 transition"
-                  >
-                    Force PASS Scan (12%)
-                  </button>
-                  <button
-                    onClick={() => triggerTestScan(0.78, 'FAIL')}
-                    className="w-full py-2 bg-red-950/40 hover:bg-red-900/50 text-red-300 rounded-lg border border-red-800/50 transition"
-                  >
-                    Force FAIL Scan (78%)
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5 shadow-xl flex flex-col justify-between">
-                <div>
-                  <h3 className="text-xs font-semibold text-gray-300">System Telemetry</h3>
-                  <p className="text-xs text-gray-500 mt-2">
-                    Live frames captured every 500ms and routed to FastAPI engine. PatchCore anomaly score determines pass/fail thresholds in real time.
-                  </p>
-                </div>
-                <div className="flex items-center gap-2 text-[11px] font-mono text-emerald-400 pt-3 border-t border-gray-800">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                  <span>PIPELINE ONLINE</span>
-                </div>
-              </div>
-            )}
-          </div>
+<div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+  {/* Left: Camera + Shift Metrics */}
+  <div className="lg:col-span-2 flex flex-col gap-6">
+
+    <CameraView
+      onFrameCapture={handleFrameCapture}
+      heatmapUrl={heatmapUrl}
+      status={manualOverride ? 'PASS' : backendStatus}
+      opacity={opacity}
+      anomalyScore={currentScore}
+      confidence={currentConfidence}
+      isScanning={isScanning}
+      isCalibrating={isCalibrating}
+    />
+
+    {/* Today's Shift Metrics */}
+    <ShiftMetrics
+      logs={logs}
+      stats={backendStats}
+    />
+
+  </div>
+
+  {/* Right: Controls + Telemetry */}
+  <div className="lg:col-span-1 flex flex-col gap-6">
+
+    <Controls
+      sensitivity={sensitivity}
+      setSensitivity={handleThresholdChange}
+      opacity={opacity}
+      setOpacity={setOpacity}
+      status={status}
+      onOverride={handleOverride}
+      onResetOverride={() => {
+  manualOverrideRef.current = false;
+  setManualOverride(false);
+}}
+      isScanning={isScanning}
+      setIsScanning={setIsScanning}
+      onStartCalibration={handleStartCalibration}
+      isCalibrating={isCalibrating}
+      calibrationProgress={calibrationProgress}
+    />
+
+    {devMode ? (
+      <div className="bg-gray-900 border border-amber-500/30 rounded-2xl p-5 shadow-xl flex flex-col gap-3">
+        <div className="flex justify-between items-center">
+          <span className="text-xs font-semibold text-amber-300">
+            Demo Testing Controls
+          </span>
+          <span className="text-[10px] font-mono text-amber-400/80">
+            DEV ONLY
+          </span>
         </div>
 
-        <div className="lg:col-span-1">
-          <Controls
-            sensitivity={sensitivity}
-            setSensitivity={handleThresholdChange}
-            opacity={opacity}
-            setOpacity={setOpacity}
-            status={status}
-            onOverride={() => setManualOverride(true)}
-            onResetOverride={() => setManualOverride(false)}
-            isScanning={isScanning}
-            setIsScanning={setIsScanning}
-            onStartCalibration={handleStartCalibration}
-            isCalibrating={isCalibrating}
-            calibrationProgress={calibrationProgress}
-          />
+        <p className="text-[11px] text-gray-400">
+          Simulate backend inspection payloads:
+        </p>
+
+        <div className="flex flex-col gap-2 font-mono text-xs mt-auto">
+          <button
+            onClick={() => triggerTestScan(0.12, 'PASS')}
+            className="w-full py-2 bg-emerald-950/40 hover:bg-emerald-900/50 text-emerald-300 rounded-lg border border-emerald-800/50 transition"
+          >
+            Force PASS Scan (12%)
+          </button>
+
+          <button
+            onClick={() => triggerTestScan(0.78, 'FAIL')}
+            className="w-full py-2 bg-red-950/40 hover:bg-red-900/50 text-red-300 rounded-lg border border-red-800/50 transition"
+          >
+            Force FAIL Scan (78%)
+          </button>
         </div>
       </div>
+    ) : (
+      <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5 shadow-xl flex flex-col justify-between flex-1 gap-4">
+  <div className="flex flex-col gap-3">
+    <h3 className="text-xs font-semibold text-gray-300">
+      System Telemetry
+    </h3>
+
+    <p className="text-xs text-gray-500 leading-relaxed">
+      Live frames captured every 500ms and routed to FastAPI engine.
+      PatchCore anomaly score determines pass/fail thresholds in real time.
+    </p>
+
+    {/* Live Telemetry Chips */}
+    <div className="grid grid-cols-2 gap-2 text-[11px] font-mono bg-gray-950/60 p-3 rounded-xl border border-gray-800/80">
+      <div>
+        <span className="text-gray-500 block text-[10px]">INTERVAL</span>
+        <span className="text-gray-200">500 ms</span>
+      </div>
+      <div>
+        <span className="text-gray-500 block text-[10px]">MODEL</span>
+        <span className="text-gray-200">PatchCore</span>
+      </div>
+      <div>
+        <span className="text-gray-500 block text-[10px]">BACKEND</span>
+        <span className="text-gray-200">FastAPI</span>
+      </div>
+      <div>
+        <span className="text-gray-500 block text-[10px]">PORT</span>
+        <span className="text-gray-200">8001</span>
+      </div>
+    </div>
+  </div>
+
+  <div className="flex items-center gap-2 text-[11px] font-mono text-emerald-400 pt-3 border-t border-gray-800">
+    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+    <span>PIPELINE ONLINE</span>
+  </div>
+</div>
+    )}
+
+  </div>
+
+</div>
 
       {/* Audit Log */}
       <AuditLog logs={logs} onSelectSnapshot={(log) => setSelectedLog(log)} />

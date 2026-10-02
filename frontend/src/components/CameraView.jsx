@@ -77,16 +77,16 @@ export default function CameraView({
         <div className="flex items-center gap-2">
           <Camera className="w-4 h-4 text-indigo-400" />
           <span className="font-mono text-xs font-semibold tracking-wider text-gray-200">
-            CAM_01 // INSP_ZONE_A
+            INSPECTION CAM
           </span>
         </div>
 
         {/* Live Status Pill */}
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-1.5 font-mono text-xs">
-            <span className="text-gray-500">SCORE:</span>
+            <span className="text-gray-500">ANOMALY:</span>
             <span className={`font-bold ${anomalyScore > 0.4 ? 'text-red-400' : 'text-emerald-400'}`}>
-              {(anomalyScore * 100).toFixed(1)}%
+              {Number(anomalyScore).toFixed(2)}
             </span>
           </div>
           <div className="flex items-center gap-1.5 font-mono text-xs">
@@ -144,11 +144,7 @@ status === 'READY' ? 'bg-gray-500/20 text-gray-300 border border-gray-500/40' :
             </div>
 
             {/* Telemetry Overlay Text */}
-            <div className="absolute bottom-2 left-3 font-mono text-[10px] text-gray-400/80 bg-black/60 px-2 py-1 rounded backdrop-blur pointer-events-none flex gap-3">
-              <span>FPS: 30</span>
-              <span>LATENCY: 14ms</span>
-              <span>MODEL: RESNET18_PATCHCORE</span>
-            </div>
+            
           </>
         )}
       </div>

@@ -309,7 +309,23 @@ async def inspect(file: UploadFile = File(...)):
         "threshold": current_threshold,
         "heatmap_b64": "data:image/png;base64," + base64.b64encode(png.tobytes()).decode("ascii"),
     }
+@app.post("/override-latest")
+def override_latest():
+    cursor = db.execute(
+        "SELECT rowid FROM log ORDER BY rowid DESC LIMIT 1"
+    )
+    row = cursor.fetchone()
 
+    if row is None:
+        raise HTTPException(status_code=404, detail="No inspection to override.")
+
+    db.execute(
+        "UPDATE log SET result='PASS' WHERE rowid=?",
+        (row[0],),
+    )
+    db.commit()
+
+    return {"status": "PASS", "overridden": True}
 
 @app.get("/model-status")
 def get_model_status():

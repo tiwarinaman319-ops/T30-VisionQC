@@ -88,3 +88,9 @@ function dataURLToBlob(dataURL) {
 
   return new Blob([bytes], { type: mime });
 }
+export async function overrideLatest() {
+  const response = await fetch(`${API_BASE}/override-latest`, {
+    method: "POST",
+  });
+  return getJSON(response);
+}
